@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
@@ -6,31 +7,46 @@
 
 struct termios orig_termios;
 
+void die(const char*);
 void disable_raw_mode();
 void enable_raw_mode();
 
 int main() {
   enable_raw_mode();
 
-  char c;
-  while (read(STDIN_FILENO, &c, 1) == 1 && c != 'q') {
+  while (1) {
+    char c = '\0';
+    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) {
+      die("read");
+    }
     // iscntrl(char) test whether a character is a control character. (ASCII 0-31 and 127) (<ctype.h>)
     if (iscntrl(c)) {
-      printf("%d\n", c);
+      printf("%d\r\n", c);
     }
     else {
-      printf("%d ('%c')\n", c, c);
+      printf("%d ('%c')\r\n", c, c);
     }
+    if (c == 'q')
+      break;
   }
   return 0;
 }
 
+void die(const char *s) {
+  perror(s);
+  exit(1);
+}
+
 void disable_raw_mode() {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &orig_termios) == -1) {
+    die("tcsetattr");
+  }
 }
 
 void enable_raw_mode() {
-  tcgetattr(STDIN_FILENO, &orig_termios);
+  if (tcgetattr(STDIN_FILENO, &orig_termios) == -1) {
+    die("tcgetattr");
+  }
 /* we use it to call disable_raw_mode() automatically when program exits,
  * either by returning from main(), or by calling the exit() function */
   atexit(disable_raw_mode);
@@ -45,10 +61,16 @@ void enable_raw_mode() {
    // Similar behaviour when you type your password after "sudo" command
    //
    // ICANON flag allows us to turn off canonical mode. (reading input byte-by-byte instead of line-by-line)
-  raw.c_iflag &= ~(IXON | ICRNL);
+  raw.c_iflag &= ~(IXON | ICRNL | BRKINT | INPCK | ISTRIP);
+  raw.c_oflag &= ~(OPOST);
+  raw.c_cflag &= (CS8);
   raw.c_lflag &= ~(ECHO | ICANON | ISIG | IEXTEN);
+  raw.c_cc[VMIN] = 0;
+  raw.c_cc[VTIME] = 1;
   /* The TCSAFLUSH argument specifies when to apply the change, in this case it waits
    * for all pending output to be written to the terminal, and also discards any input
    * that hasn't been read */
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1 && errno != EAGAIN) {
+    die("read");
+  }
 }
