@@ -21,6 +21,8 @@ void disable_raw_mode();
 void enable_raw_mode();
 char editor_read_key();
 void editor_process_keypress();
+void editor_refresh_screen();
+void editor_draw_rows();
 
 /* Init */
 
@@ -28,9 +30,26 @@ int main() {
   enable_raw_mode();
 
   while (1) {
+    editor_refresh_screen();
     editor_process_keypress();
   }
   return 0;
+}
+
+/* Output */
+
+void editor_draw_rows() {
+  for (int i = 0; i < 24; i++) {
+    write(STDIN_FILENO, "~\r\n", 3);
+  }
+}
+
+void editor_refresh_screen() {
+  write(STDIN_FILENO, "\x1b[2J", 4);
+  write(STDIN_FILENO, "\x1b[H", 3);
+
+  editor_draw_rows();
+  write(STDIN_FILENO, "\x1b[H", 3);
 }
 
 /* Input */
@@ -40,6 +59,8 @@ void editor_process_keypress() {
 
   switch(c) {
     case CTRL_KEY('q'):
+      write(STDIN_FILENO, "\x1b[2J", 4);
+      write(STDIN_FILENO, "\x1b[H", 3);
       exit(0);
       break;
   }
@@ -59,6 +80,8 @@ char editor_read_key() {
 }
 
 void die(const char *s) {
+  write(STDIN_FILENO, "\x1b[2J", 4);
+  write(STDIN_FILENO, "\x1b[H", 3);
   perror(s);
   exit(1);
 }
