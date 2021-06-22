@@ -18,6 +18,9 @@ ARROW_LEFT = 1000,
 ARROW_RIGHT,
 ARROW_UP,
 ARROW_DOWN,
+DEL_KEY,
+HOME_KEY,
+END_KEY,
 PAGE_UP,
 PAGE_DOWN
 };
@@ -50,7 +53,7 @@ int editor_read_key();
 void editor_process_keypress();
 void editor_refresh_screen();
 void editor_draw_rows(struct abuf *);
-int get_window_size();
+int get_window_size(int*, int*);
 int get_cursor_position(int *, int *);
 void init_editor();
 void ab_append(struct abuf*, const char*, int);
@@ -163,6 +166,13 @@ void editor_process_keypress() {
       exit(0);
       break;
 
+    case HOME_KEY:
+      E.cx = 0;
+      break;
+    case END_KEY:
+      E.cx = E.screencols - 1;
+      break;
+
     case PAGE_UP:
     case PAGE_DOWN:
     {
@@ -246,10 +256,20 @@ int editor_read_key() {
           return '\x1b';
         if (seq[2] == '~') {
           switch (seq[1]) {
+            case '1':
+              return HOME_KEY;
+            case '3':
+              return DEL_KEY;
+            case '4':
+              return END_KEY;
             case '5':
               return PAGE_UP;
             case '6':
               return PAGE_DOWN;
+            case '7':
+              return HOME_KEY;
+            case '8':
+              return END_KEY;
           }
         }
       } else {
@@ -259,7 +279,17 @@ int editor_read_key() {
           case 'B': return ARROW_DOWN;
           case 'C': return ARROW_RIGHT;
           case 'D': return ARROW_LEFT;
+          case 'H': return HOME_KEY;
+          case 'F': return END_KEY;
         }
+      }
+    }
+    else if (seq[0] == 'O') {
+      switch (seq[1]) {
+        case 'H':
+          return HOME_KEY;
+        case 'F':
+          return END_KEY;
       }
     }
 
