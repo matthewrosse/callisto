@@ -1,8 +1,12 @@
 /* Includes */
 
+#define _DEFAULT_SOURCE
+#define _BSD_SOURCE
+#define _GNU_SOURCE
+
+#include <stdio.h>
 #include <ctype.h>
 #include <errno.h>
-#include <stdio.h>
 #include <sys/ioctl.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,14 +71,16 @@ void init_editor();
 void ab_append(struct abuf*, const char*, int);
 void ab_free(struct abuf *);
 void editor_move_cursor(int);
-void editor_open();
+void editor_open(char *);
 
 /* Init */
 
-int main() {
+int main(int argc, char *argv[]) {
   enable_raw_mode();
   init_editor();
-  editor_open();
+  if (argc >= 2) {
+    editor_open(argv[1]);
+  }
 
   while (1) {
     editor_refresh_screen();
@@ -93,15 +99,26 @@ void init_editor() {
 
 /* File input/output */
 
-void editor_open() {
-  char *line = "Hello, world!";
-  ssize_t linelen = 13;
+void editor_open(char *filename) {
+  FILE *fp = fopen(filename, "r");
+  if (!fp) die("fopen");
 
-  E.row.size = linelen;
-  E.row.chars = malloc(linelen + 1);
-  memcpy(E.row.chars, line, linelen);
-  E.row.chars[linelen] = '\0';
-  E.numrows = 1;
+  char *line = NULL;
+  size_t linecap = 0;
+  ssize_t linelen;
+  linelen = getline(&line, &linecap, fp);
+  if (linelen != -1) {
+    while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r')) {
+      linelen--;
+    }
+    E.row.size = linelen;
+    E.row.chars = malloc(linelen + 1);
+    memcpy(E.row.chars, line, linelen);
+    E.row.chars[linelen] = '\0';
+    E.numrows = 1;
+  }
+  free(line);
+  fclose(fp);
 }
 
 /* Output */
@@ -110,7 +127,7 @@ void editor_draw_rows(struct abuf *ab) {
   for (int i = 0; i < E.screenrows; i++) {
 
     if (i >= E.numrows) {
-        if (i == E.screenrows / 3) {
+        if (E.numrows == 0 && i == E.screenrows / 3) {
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome), "Callisto text editor -- version %s", CALLISTO_VERSION);
         if (welcomelen > E.screencols) {
