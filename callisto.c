@@ -6,6 +6,7 @@
 #include <sys/ioctl.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -27,10 +28,17 @@ PAGE_DOWN
 
 /* Data */
 
+typedef struct erow {
+  int size;
+  char *chars;
+} erow;
+
 struct editor_config {
   int cx, cy;
   int screenrows;
   int screencols;
+  int numrows;
+  erow row;
   struct termios orig_termios;
 };
 
@@ -59,12 +67,14 @@ void init_editor();
 void ab_append(struct abuf*, const char*, int);
 void ab_free(struct abuf *);
 void editor_move_cursor(int);
+void editor_open();
 
 /* Init */
 
 int main() {
   enable_raw_mode();
   init_editor();
+  editor_open();
 
   while (1) {
     editor_refresh_screen();
@@ -76,32 +86,55 @@ int main() {
 void init_editor() {
   E.cx = 0;
   E.cy = 0;
+  E.numrows = 0;
   if (get_window_size(&E.screenrows, &E.screencols) == -1)
     die("get_window_size");
+}
+
+/* File input/output */
+
+void editor_open() {
+  char *line = "Hello, world!";
+  ssize_t linelen = 13;
+
+  E.row.size = linelen;
+  E.row.chars = malloc(linelen + 1);
+  memcpy(E.row.chars, line, linelen);
+  E.row.chars[linelen] = '\0';
+  E.numrows = 1;
 }
 
 /* Output */
 
 void editor_draw_rows(struct abuf *ab) {
   for (int i = 0; i < E.screenrows; i++) {
-    if (i == E.screenrows / 3) {
-      char welcome[80];
-      int welcomelen = snprintf(welcome, sizeof(welcome), "Callisto text editor -- version %s", CALLISTO_VERSION);
-      if (welcomelen > E.screencols) {
-        welcomelen = E.screencols;
+
+    if (i >= E.numrows) {
+        if (i == E.screenrows / 3) {
+        char welcome[80];
+        int welcomelen = snprintf(welcome, sizeof(welcome), "Callisto text editor -- version %s", CALLISTO_VERSION);
+        if (welcomelen > E.screencols) {
+          welcomelen = E.screencols;
+        }
+        int padding = (E.screencols - welcomelen) / 2;
+        if (padding) {
+          ab_append(ab, "~", 1);
+          padding--;
+        }
+        while (padding--) {
+          ab_append(ab, " ", 1);
+        }
+        ab_append(ab, welcome, welcomelen);
       }
-      int padding = (E.screencols - welcomelen) / 2;
-      if (padding) {
+      else {
         ab_append(ab, "~", 1);
-        padding--;
       }
-      while (padding--) {
-        ab_append(ab, " ", 1);
-      }
-      ab_append(ab, welcome, welcomelen);
     }
     else {
-      ab_append(ab, "~", 1);
+      int len = E.row.size;
+      if (len > E.screencols)
+        len = E.screencols;
+      ab_append(ab, E.row.chars, len);
     }
 
     ab_append(ab, "\x1b[K", 3);
