@@ -39,6 +39,7 @@ typedef struct erow {
 
 struct editor_config {
   int cx, cy;
+  int rowoff;
   int screenrows;
   int screencols;
   int numrows;
@@ -73,6 +74,7 @@ void ab_free(struct abuf *);
 void editor_move_cursor(int);
 void editor_open(char *);
 void editor_append_row(char *, size_t);
+void editor_scroll();
 
 /* Init */
 
@@ -93,6 +95,7 @@ int main(int argc, char *argv[]) {
 void init_editor() {
   E.cx = 0;
   E.cy = 0;
+  E.rowoff = 0;
   E.numrows = 0;
   E.row = NULL;
   if (get_window_size(&E.screenrows, &E.screencols) == -1)
@@ -133,10 +136,21 @@ void editor_open(char *filename) {
 
 /* Output */
 
+void editor_scroll() {
+  if (E.cy < E.rowoff) {
+    E.rowoff = E.cy;
+  }
+  if (E.cy >= E.rowoff + E.screenrows) {
+    E.rowoff = E.cy - E.screenrows + 1;
+  }
+}
+
 void editor_draw_rows(struct abuf *ab) {
   for (int i = 0; i < E.screenrows; i++) {
 
-    if (i >= E.numrows) {
+    int filerow = i + E.rowoff;
+
+    if (filerow >= E.numrows) {
         if (E.numrows == 0 && i == E.screenrows / 3) {
         char welcome[80];
         int welcomelen = snprintf(welcome, sizeof(welcome), "Callisto text editor -- version %s", CALLISTO_VERSION);
@@ -158,10 +172,10 @@ void editor_draw_rows(struct abuf *ab) {
       }
     }
     else {
-      int len = E.row[i].size;
+      int len = E.row[filerow].size;
       if (len > E.screencols)
         len = E.screencols;
-      ab_append(ab, E.row[i].chars, len);
+      ab_append(ab, E.row[filerow].chars, len);
     }
 
     ab_append(ab, "\x1b[K", 3);
@@ -172,6 +186,8 @@ void editor_draw_rows(struct abuf *ab) {
 }
 
 void editor_refresh_screen() {
+  editor_scroll();
+
   struct abuf ab = ABUF_INIT;
 
   ab_append(&ab, "\x1b[?25l", 6);
@@ -180,7 +196,7 @@ void editor_refresh_screen() {
   editor_draw_rows(&ab);
 
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", E.cy + 1, E.cx + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, E.cx + 1);
   ab_append(&ab, buf, strlen(buf));
 
   ab_append(&ab, "\x1b[?25h", 6);
@@ -209,7 +225,7 @@ void editor_move_cursor(int key) {
       }
       break;
     case ARROW_DOWN:
-      if (E.cy != E.screenrows - 1) {
+      if (E.cy < E.numrows) {
         E.cy++;
       }
       break;
